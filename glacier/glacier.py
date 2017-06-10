@@ -29,7 +29,16 @@ def output_headers(headers, output):
 
     :param headers: the output to be printed as {'header1':'data1',...}
     :type headers: dict
+    :param output: selects output type, must be
+    listed in constants.HEADERS_OUTPUT_FORMAT
+    :type output: string
+    :raises: ValueError when output format is not supported
     """
+
+    if output not in constants.HEADERS_OUTPUT_FORMAT:
+        raise ValueError("Output must be in {}, got"
+                         ":{}".format(constants.HEADERS_OUTPUT_FORMAT,
+                                      output))
     rows = [(k, headers[k]) for k in headers.keys()]
     if output == 'print':
         table = PrettyTable(["Header", "Value"])
@@ -38,11 +47,6 @@ def output_headers(headers, output):
                 table.add_row(row)
 
         print table
-
-    if output not in constants.HEADERS_OUTPUT_FORMAT:
-        raise ValueError("Output format must be {}, got"
-                         ":{}".format(constants.HEADERS_OUTPUT_FORMAT,
-                                      output))
 
     if output == 'csv':
         csvwriter = csv.writer(sys.stdout, quoting=csv.QUOTE_ALL)
@@ -62,10 +66,13 @@ def output_table(results, output, keys=None, sort_key=None):
     [{'key1':'data1.1', 'key2':'data1.2', ... },
      {'key1':'data1.2', 'key2':'data2.2', ... },
      ...]
-    keys: dict of headers to be printed for each key:
+    :param keys: dict of headers to be printed for each key:
     {'key1':'header1', 'key2':'header2',...}
-
-    sort_key: the key to use for sorting the table.
+    :type keys: dict
+    :param sort_key: the key to use for sorting the table.
+    :type sort_key: string
+    :raises : ValueError if output not in constants.TABLE_OUTPUT_FORMAT
+    :returns: nothing, prints the output on the console
     """
 
     if output not in constants.TABLE_OUTPUT_FORMAT:
@@ -105,6 +112,10 @@ def output_msg(msg, output, success=True):
     :type msg: str
     :param success: whether the operation was a success or not.
     :type success: boolean
+    :param output: output format
+    :type output: string
+    :raises: ValueError if output not in constants.TABLE_OUTPUT_FORMAT
+    :returns :nothing, prints the output or sys.exist with status 125
     """
 
     if output not in constants.TABLE_OUTPUT_FORMAT:
@@ -131,7 +142,15 @@ def size_fmt(num, decimals = 1):
     Formats file sizes in human readable format. Anything bigger than
     TB is returned is TB. Number of decimals is optional,
     defaults to 1.
+
+    :param num: value to be converted
+    :type num: int
+    :decimals: number of decimals to consider
+    :type decimals: int
+    :returns: formatted number
+    :returns type: string
     """
+
     fmt = "%%3.%sf %%s"% decimals
     for x in ['bytes','KB','MB','GB']:
         if num < 1024.0:
@@ -208,6 +227,7 @@ def rmvault(args):
     """
     Remove a vault.
     """
+
     glacier = default_glacier_wrapper(args)
     response = glacier.rmvault(args.vault)
     output_headers(response, args.output)
@@ -217,6 +237,7 @@ def describevault(args):
     """
     Give the description of a vault.
     """
+
     glacier = default_glacier_wrapper(args)
     response = glacier.describevault(args.vault)
     headers = {'LastInventoryDate': "LastInventory",
@@ -231,6 +252,7 @@ def listmultiparts(args):
     """
     Give an overview of all multipart uploads that are not finished.
     """
+
     glacier = default_glacier_wrapper(args)
     response = glacier.listmultiparts(args.vault)
     if not response:
@@ -244,6 +266,7 @@ def abortmultipart(args):
     """
     Abort a multipart upload which is in progress.
     """
+
     glacier = default_glacier_wrapper(args)
     response = glacier.abortmultipart(args.vault, args.uploadId)
     output_headers(response, args.output)
@@ -253,6 +276,7 @@ def listjobs(args):
     """
     List all the active jobs for a vault.
     """
+
     glacier = default_glacier_wrapper(args)
     job_list = glacier.list_jobs(args.vault)
     if job_list == []:
@@ -281,6 +305,7 @@ def download(args):
     """
     Download an archive.
     """
+
     glacier = default_glacier_wrapper(args)
     response = glacier.download(args.vault, args.archive, args.partsize,
                                 out_file_name=args.outfile,
@@ -368,6 +393,7 @@ def getarchive(args):
     """
     Initiate an archive retrieval job.
     """
+
     glacier = default_glacier_wrapper(args)
     status, job, jobid = glacier.getarchive(args.vault, args.archive)
     output_headers(job, args.output)
@@ -377,6 +403,7 @@ def rmarchive(args):
     """
     Remove an archive from a vault.
     """
+
     glacier = default_glacier_wrapper(args)
     glacier.rmarchive(args.vault, args.archive)
     output_msg("Archive removed.", args.output, success=True)
@@ -386,6 +413,7 @@ def search(args):
     """
     Search the database for file name or description.
     """
+
     glacier = default_glacier_wrapper(args)
     response = glacier.search(vault=args.vault,
                               region=args.region,
@@ -398,6 +426,7 @@ def inventory(args):
     """
     Fetch latest inventory (or start a retrieval job if not ready).
     """
+
     glacier = default_glacier_wrapper(args)
     output = args.output
     if sys.stdout.isatty() and output == 'print':
@@ -439,6 +468,7 @@ def treehash(args):
     """
     Calculates the tree hash of the given file(s).
     """
+
     glacier = default_glacier_wrapper(args)
     hash_results = []
     for f in args.filename:
@@ -467,6 +497,7 @@ def snssync(args):
     vaults specificed in it to notifications, otherwiser
     subscribe all vault.
     """
+
     glacier = default_glacier_wrapper(args)
     response = glacier.sns_sync(sns_options=args.sns_options,
                                 output=args.output)
@@ -477,6 +508,7 @@ def snssubscribe(args):
     Subscribe individual vaults to notifications by method
     specified by user.
     """
+
     protocol = args.protocol
     endpoint = args.endpoint
     vault_names = args.vault
@@ -492,6 +524,7 @@ def snslistsubscriptions(args):
     """
     List subscriptions.
     """
+
     protocol = args.protocol
     endpoint = args.endpoint
     topic = args.topic
@@ -512,6 +545,7 @@ def snsunsubscribe(args):
     Unsubscribe individual vaults from notifications for
     specified protocol, endpoint and vault.
     """
+
     protocol = args.protocol
     endpoint = args.endpoint
     topic = args.topic

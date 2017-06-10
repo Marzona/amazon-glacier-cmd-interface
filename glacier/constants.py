@@ -15,11 +15,11 @@ TOTAL_RETRIES = 100
 # For large files, the limits above could be surpassed. We also set a per-Gb
 # criteria that allows more errors for larger uploads.
 MAX_TOTAL_RETRY_PER_GB = 2
-HEADERS_OUTPUT_FORMAT = ["csv","json"]
+HEADERS_OUTPUT_FORMAT = ["csv","json", "print"]
 TABLE_OUTPUT_FORMAT = ["csv","json", "print"]
 SYSTEM_WIDE_CONFIG_FILENAME = "/etc/glacier-cmd.conf"
 USER_CONFIG_FILENAME = "~/.glacier-cmd"
-HELP_MESSAGE_CONFIG = u"(Required if you have not created a "
+HELP_MESSAGE_CONFIG = "(Required if you have not created a "\
                        "~/.glacier-cmd or /etc/glacier-cmd.conf config file)"
 ERRORCODE = {'InternalError': 127,        # Library internal error.
              'UndefinedErrorCode': 126,   # Undefined code.
