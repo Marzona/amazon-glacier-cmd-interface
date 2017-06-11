@@ -2,10 +2,11 @@
 """
 .. module:: GlacierWrapper
    :platform: Unix, Windows
-   :synopsis: Wrapper for accessing Amazon Glacier, with Amazon SimpleDB 
+   :synopsis: Wrapper for accessing Amazon Glacier, with Amazon SimpleDB
    support and other features.
 """
 
+# import modules
 import math
 import json
 import pytz
@@ -16,7 +17,7 @@ import stat
 import time
 import sys
 import traceback
-import glaciercorecalls
+
 import select
 import hashlib
 import fcntl
@@ -25,6 +26,7 @@ import struct
 
 import boto
 import boto.sdb
+
 from boto import sns
 
 from functools import wraps
@@ -32,9 +34,11 @@ from dateutil.parser import parse as dtparse
 from datetime import datetime
 from pprint import pformat
 
-from glaciercorecalls import GlacierConnection, GlacierWriter
+# import our modules
 
-from glacierexception import *
+from modules import constants
+from modules.glaciercorecalls import GlacierConnection, GlacierWriter
+
 
 class log_class_call(object):
     """
@@ -108,27 +112,6 @@ class GlacierWrapper(object):
     Wrapper for accessing Amazon Glacier, with Amazon SimpleDB support
     and other features.
     """
-
-    VAULT_NAME_ALLOWED_CHARACTERS = "[a-zA-Z\.\-\_0-9]+"
-    ID_ALLOWED_CHARACTERS = "[a-zA-Z\-\_0-9]+"
-    MAX_VAULT_NAME_LENGTH = 255
-    MAX_VAULT_DESCRIPTION_LENGTH = 1024
-    MAX_PARTS = 10000
-    AVAILABLE_REGIONS = ('us-east-1', 'us-west-2', 'us-west-1',
-                         'eu-west-1', 'eu-central-1', 'sa-east-1',
-                         'ap-northeast-1', 'ap-southeast-1', 'ap-southeast-2')
-    AVAILABLE_REGIONS_MESSAGE = """\
-Invalid region. Available regions for Amazon Glacier are:
-us-east-1 (US - Virginia)
-us-west-1 (US - N. California)
-us-west-2 (US - Oregon)
-eu-west-1 (EU - Ireland)
-eu-central-1 (EU - Frankfurt)
-sa-east-1 (South America - Sao Paulo)
-ap-northeast-1 (Asia-Pacific - Tokyo)
-ap-southeast-1 (Asia Pacific (Singapore)
-ap-southeast-2 (Asia-Pacific - Sydney)\
-"""
 
     def setuplogging(self, logfile, loglevel, logtostdout):
         """
@@ -337,10 +320,10 @@ aws_secret_key %s\
         :raises: :py:exc:`glacier.glacierexception.InputException`
         """
 
-        if len(name) > self.MAX_VAULT_NAME_LENGTH:
+        if len(name) > constants.MAX_VAULT_NAME_LENGTH:
             raise InputException(
-                u"Vault name can be at most %s characters long." % self.MAX_VAULT_NAME_LENGTH,
-                cause="Vault name more than %s characters long." % self.MAX_VAULT_NAME_LENGTH,
+                u"Vault name can be at most %s characters long." % constants.MAX_VAULT_NAME_LENGTH,
+                cause="Vault name more than %s characters long." % constants.MAX_VAULT_NAME_LENGTH,
                 code="VaultNameError")
 
         if len(name) == 0:
@@ -352,10 +335,11 @@ aws_secret_key %s\
         # If the name starts with an illegal character, then result
         # m is None. In that case the expression becomes '0 != len(name)'
         # which of course is always True.
-        m = re.match(self.VAULT_NAME_ALLOWED_CHARACTERS, name)
+        m = re.match(constants.VAULT_NAME_ALLOWED_CHARACTERS, name)
         if (m.end() if m else 0) != len(name):
             raise InputException(
-                u"""Allowed characters are a-z, A-Z, 0-9, '_' (underscore), '-' (hyphen), and '.' (period)""",
+                u"allowed characters are a-z, A-Z, 0-9, '_' "\
+                "(underscore), '-' (hyphen), and '.' (period)",
                 cause='Illegal characters in the vault name.',
                 code="VaultNameError")
 
@@ -365,8 +349,8 @@ aws_secret_key %s\
                     'Vault description is valid.')
     def _check_vault_description(self, description):
         """
-        Checks whether a vault description is valid (at least one character,
-        not too long, no illegal characters).
+        Checks whether a vault description is valid (at least one
+        character, not too long, no illegal characters).
 
         :param description: Vault description
         :type description: str
@@ -376,19 +360,19 @@ aws_secret_key %s\
         :raises: :py:exc:`glacier.glacierexception.InputException`
         """
 
-        if len(description) > self.MAX_VAULT_DESCRIPTION_LENGTH:
+        if len(description) > constants.MAX_VAULT_DESCRIPTION_LENGTH:
             raise InputException(
-                u"Description must be no more than %s characters."% self.MAX_VAULT_DESCRIPTION_LENGTH,
-                cause='Vault description contains more than %s characters.'% self.MAX_VAULT_DESCRIPTION_LENGTH,
+                u"Description must be no more than %s characters."% constants.MAX_VAULT_DESCRIPTION_LENGTH,
+                cause='Vault description contains more than %s characters.'% constants.MAX_VAULT_DESCRIPTION_LENGTH,
                 code="VaultDescriptionError")
 
         for char in description:
             n = ord(char)
             if n < 32 or n > 126:
                 raise InputException(
-                    u"""The allowed characters are 7-bit ASCII without \
-control codes, specifically ASCII values 32-126 decimal \
-or 0x20-0x7E hexadecimal.""",
+                    u"The allowed characters are 7-bit ASCII without "\
+                    "control codes, specifically ASCII values 32-126 "\
+                    "decimal or 0x20-0x7E hexadecimal.",
                     cause="Invalid characters in the vault name.",
                     code="VaultDescriptionError")
 
@@ -405,7 +389,8 @@ or 0x20-0x7E hexadecimal.""",
 
         :param amazon_id: id to be validated
         :type amazon_id: str
-        :param id_type: the case-sensity type of id (JobId, UploadId, ArchiveId).
+        :param id_type: the case-sensity type of id
+        (JobId, UploadId, ArchiveId).
         :type id_type: str
 
         :returns: True if valid, raises exception otherwise.
@@ -423,7 +408,7 @@ or 0x20-0x7E hexadecimal.""",
                 cause='Incorrect length of the %s string.'% id_type,
                 code="IdError")
 
-        m = re.match(self.ID_ALLOWED_CHARACTERS, amazon_id)
+        m = re.match(constants.ID_ALLOWED_CHARACTERS, amazon_id)
         if (m.end() if m else 0) != len(amazon_id):
             raise InputException(u"""\
 This %s contains invalid characters. \
@@ -448,9 +433,9 @@ Allowed characters are a-z, A-Z, 0-9, '_' (underscore) and '-' (hyphen)\
         :raises: GlacierWrapper.InputException
         """
 
-        if not region in self.AVAILABLE_REGIONS:
+        if not region in constants.AVAILABLE_REGIONS:
             raise InputException(
-                self.AVAILABLE_REGIONS_MESSAGE,
+                constants.AVAILABLE_REGIONS_MESSAGE,
                 cause='Invalid region code: %s.' % region,
                 code='RegionError')
 
@@ -471,7 +456,7 @@ Allowed characters are a-z, A-Z, 0-9, '_' (underscore) and '-' (hyphen)\
         def _part_size_for_total_size(total_size):
             return self._next_power_of_2(
                 int(math.ceil(
-                    float(total_size) / (1024 * 1024 * self.MAX_PARTS)
+                    float(total_size) / (1024 * 1024 * constants.MAX_PARTS)
                 )))
 
         if part_size < 0:
@@ -482,15 +467,15 @@ Allowed characters are a-z, A-Z, 0-9, '_' (underscore) and '-' (hyphen)\
         else:
             ps = self._next_power_of_2(part_size)
             if not ps == part_size:
-                self.logger.warning("""\
-Part size in MB must be a power of 2, \
-e.g. 1, 2, 4, 8 MB; automatically increased part size from %s to %s.\
-""" % (part_size, ps))
-
+                self.logger.warning("Part size in MB must be a "\
+                                    "power of 2, "\
+                                    "e.g. 1, 2, 4, 8 MB; "\
+                                    "automatically increased part "\
+                                    "size from %s to %s." % (part_size, ps))
             part_size = ps
 
         # Check if user specified value is big enough, and adjust if needed.
-        if total_size > part_size * 1024 * 1024 * self.MAX_PARTS:
+        if total_size > part_size * 1024 * 1024 * constants.MAX_PARTS:
             part_size = _part_size_for_total_size(total_size)
             self.logger.warning("Part size given is too small; \
 using %s MB parts to upload." % part_size)
@@ -539,7 +524,9 @@ using %s MB parts to upload." % part_size)
         if sys.stdout.isatty():
 
             # Get the current screen width.
-            cols = struct.unpack('hh',  fcntl.ioctl(sys.stdout, termios.TIOCGWINSZ, '1234'))[1]
+            cols = struct.unpack('hh', fcntl.ioctl(sys.stdout,
+                                                   termios.TIOCGWINSZ,
+                                                   '1234'))[1]
 
             # Make sure the message fits on a single line, strip if not,
             # and add spaces to fill the line if it's shorter (to erase
@@ -699,7 +686,8 @@ using %s MB parts to upload." % part_size)
                     self.logger.debug('Deleted orphaned archive from the database: %s.' % item.name)
             except boto.exception.SDBResponseError as e:
                 raise ResponseException(
-                        'SimpleDB did not respond correctly to our orphaned listings check.',
+                        "SimpleDB did not respond correctly to "\
+                        "our orphaned listings check.",
                         cause=self._decode_error_message(e.body),
                         code=e.code)
 
@@ -783,10 +771,11 @@ using %s MB parts to upload." % part_size)
         job_list = []
         while True:
             try:
-                response = self.glacierconn.list_jobs(vault_name,
-                                                      completed=completed,
-                                                      status_code=status_code,
-                                                      marker=marker)
+                response = self.glacierconn.list_jobs(
+                        vault_name,
+                        completed=completed,
+                        status_code=status_code,
+                        marker=marker)
             except boto.glacier.exceptions.UnexpectedHTTPResponseError as e:
                 raise ResponseException(
                     'Failed to recieve the jobs list for vault %s.' % vault_name,
@@ -855,12 +844,13 @@ using %s MB parts to upload." % part_size)
                     "Multipart upload successfully aborted.")
     def abortmultipart(self, vault_name, upload_id):
         """
-        Aborts an incomplete multipart upload, causing any uploaded data to be
-        removed from Amazon Glacier.
+        Aborts an incomplete multipart upload, causing any
+        uploaded data to be removed from Amazon Glacier.
 
         :param vault_name: Name of the vault.
         :type vault_name: str
-        :param upload_id: the UploadId of the multipart upload to be aborted.
+        :param upload_id: the UploadId of the multipart upload
+        to be aborted.
         :type upload_id: str
 
         :returns: server response.
@@ -877,7 +867,9 @@ using %s MB parts to upload." % part_size)
         self._check_vault_name(vault_name)
         self._check_id(upload_id, "UploadId")
         try:
-            response = self.glacierconn.abort_multipart_upload(vault_name, upload_id)
+            response = self.glacierconn.abort_multipart_upload(
+                    vault_name,
+                    upload_id)
         except boto.glacier.exceptions.UnexpectedHTTPResponseError as e:
             raise ResponseException(
                 'Failed to abort multipart upload with id %s.' % upload_id,
@@ -982,7 +974,11 @@ using %s MB parts to upload." % part_size)
 
         if resume and stdin:
             raise InputException(
-                'You must provide the UploadId to resume upload of streams from stdin.\nUse glacier-cmd listmultiparts <vault> to find the UploadId.',
+                "You must provide the UploadId to "\
+                "resume upload of streams from "\
+                "stdin.\nUse glacier-cmd "\
+                "listmultiparts <vault> "\
+                "to find the UploadId.",
                 code='CommandError')
 
         # If file_name is given, try to use this file(s).
@@ -1037,42 +1033,57 @@ using %s MB parts to upload." % part_size)
         else:
             self.logger.info('Starting upload of %s to %s.\nDescription: %s'% (file_name if file_name else 'data from stdin', vault_name, description))
 
-        # If user did not specify part_size, compute the optimal (i.e. lowest
-        # value to stay within the self.MAX_PARTS (10,000) block limit).
+        # If user did not specify part_size, compute the
+        # optimal (i.e. lowest value to stay within the
+        # constants.MAX_PARTS (10,000) block limit).
         part_size = self._check_part_size(part_size, total_size)
         part_size_in_bytes = part_size * 1024 * 1024
 
-        # If we have an UploadId, check whether it is linked to a current
-        # job. If so, check whether uploaded data matches the input data and
-        # try to resume uploading.
+        # If we have an UploadId, check whether it is linked
+        # to a current job. If so, check whether uploaded data
+        # matches the input data and try to resume uploading.
         upload = None
         if uploadid:
             uploads = self.listmultiparts(vault_name)
             for upload in uploads:
                 if uploadid == upload['MultipartUploadId']:
-                    self.logger.debug('Found a matching upload id. Continuing upload resumption attempt.')
+                    self.logger.debug("Found a matching upload id. "\
+                                      "Continuing upload resumption "\
+                                      "attempt.")
                     self.logger.debug(upload)
                     part_size_in_bytes = upload['PartSizeInBytes']
                     break
             else:
                 raise InputException(
-                    'Can not resume upload of this data as no existing job with this uploadid could be found.',
-                    code='IdError')
+                            "Can not resume upload of "\
+                            "this data as no existing "\
+                            "job with this uploadid "\
+                            "could be found.",
+                            code='IdError')
 
         # Initialise the writer task.
-        writer = GlacierWriter(self.glacierconn, vault_name, description=description,
-                               part_size_in_bytes=part_size_in_bytes, uploadid=uploadid, logger=self.logger)
+        writer = GlacierWriter(self.glacierconn, vault_name,
+                               description=description,
+                               part_size_in_bytes=part_size_in_bytes,
+                               uploadid=uploadid, logger=self.logger)
 
         if upload:
             marker = None
             while True:
 
-                # Fetch a list of already uploaded parts and their SHA hashes.
+                # Fetch a list of already uploaded parts and their
+                # SHA hashes.
                 try:
-                    response = self.glacierconn.list_parts(vault_name, uploadid, marker=marker)
+                    response = self.glacierconn.list_parts(
+                            vault_name,
+                            uploadid,
+                            marker=marker)
                 except boto.glacier.exceptions.UnexpectedHTTPResponseError as e:
                     raise ResponseException(
-                        'Failed to get a list already uploaded parts for interrupted upload %s.'% uploadid,
+                        "Failed to get a list "\
+                        "already uploaded parts "\
+                        "for interrupted "\
+                        "upload ".format(uploadid),
                         cause=self._decode_error_message(e.body),
                         code=e.code)
 
@@ -1080,10 +1091,13 @@ using %s MB parts to upload." % part_size)
                 current_position = 0
                 stop = 0
                 # Process the parts list.
-                # For each part of data, take the matching data range from
+                # For each part of data, take the matching
+                # data range from
                 # the local file, and compare hashes.
-                # If recieving data over stdin, the parts must be sequential
-                # and the first must start at 0. For file, we can use the seek()
+                # If recieving data over stdin, the parts
+                # must be sequential
+                # and the first must start at 0. For file,
+                # we can use the seek()
                 # function to handle non-sequential parts.
                 for part in list_parts_response['Parts']:
                     start, stop = (int(p) for p in part['RangeInBytes'].split('-'))
@@ -1091,18 +1105,20 @@ using %s MB parts to upload." % part_size)
                     if not start == current_position:
                         if stdin or is_pipe:
                             raise InputException(
-                                'Cannot verify non-sequential upload data from stdin or pipe.',
+                                "Cannot verify non-sequential upload "\
+                                "data from stdin or pipe.",
                                 code='ResumeError')
                         if reader:
                             reader.seek(start)
 
                     if mmapped_file and stop > mmapped_file.size:
                         raise InputException(
-                            'File does not match uploaded data; please check your uploadid and try again.',
-                            cause='File is smaller than uploaded data.',
+                            constants.UPLOAD_DATA_ERROR_MSG,
+                            cause="File is smaller than uploaded data.",
                             code='ResumeError')
 
-                    # Try to read the chunk of data, and take the hash if we
+                    # Try to read the chunk of data, and take
+                    # the hash if we
                     # have received anything.
                     # If no data or hash mismatch, stop checking raise an
                     # exception.
@@ -1115,13 +1131,13 @@ using %s MB parts to upload." % part_size)
                             writer.tree_hashes.append(data_hash)
                         else:
                             raise InputException(
-                                'Received data does not match uploaded data; please check your uploadid and try again.',
-                                cause='SHA256 hash mismatch.',
-                                code='ResumeError')
+                                constants.UPLOAD_DATA_ERROR_MSG,
+                                cause="SHA256 hash mismatch.",
+                                code="ResumeError")
 
                     else:
                         raise InputException(
-                            'Received data does not match uploaded data; please check your uploadid and try again.',
+                            constants.UPLOAD_DATA_ERROR_MSG,
                             cause='No or not enough data to match.',
                             code='ResumeError')
 
@@ -1145,8 +1161,8 @@ using %s MB parts to upload." % part_size)
 
                 self._progress(msg)
 
-            # Finished checking; log this and print the final status update
-            # before resuming the upload.
+            # Finished checking; log this and print the final
+            # status update before resuming the upload.
             self.logger.info('Already uploaded: %s. Continuing from there.'% self._size_fmt(stop))
             if total_size > 0:
                 msg = 'Checked %s of %s (%s%%). Check done; resuming upload.' \
@@ -1231,12 +1247,15 @@ using %s MB parts to upload." % part_size)
         location = writer.get_location()
 
         if self.bookkeeping:
-            self.logger.info('Writing upload information into the bookkeeping database.')
+            self.logger.info("Writing upload information into "\
+                             "the bookkeeping database.")
 
-            # Use the alternative name as given by --name <name> if we have it.
+            # Use the alternative name as given by
+            # --name <name> if we have it.
             file_name = alternative_name if alternative_name else file_name
 
-            # If still no name this is an stdin job, so set name accordingly.
+            # If still no name this is an stdin job,
+            # so set name accordingly.
             file_name = file_name if file_name else 'Data from stdin.'
             file_attrs = {
                 'region': region,
@@ -1249,11 +1268,6 @@ using %s MB parts to upload." % part_size)
                 'hash': sha256hash,
                 'size': writer.uploaded_size
             }
-
-##            if file_name:
-##                file_attrs['filename'] = file_name
-##            elif stdin:
-##                file_attrs['filename'] = 'data from stdin'
 
             self.sdb_domain.put_attributes(file_attrs['filename'], file_attrs)
 
@@ -1280,7 +1294,8 @@ using %s MB parts to upload." % part_size)
 
         - return tuple ("ready", job, jobId).
 
-        :param vault: Vault name from where we want to retrieve the archive.
+        :param vault: Vault name from where we want to
+        retrieve the archive.
         :type vault: str
         :param archive: ArchiveID of archive to be retrieved.
         :type archive: str
@@ -1313,7 +1328,8 @@ using %s MB parts to upload." % part_size)
             response = self.glacierconn.initiate_job(vault_name, job_data)
         except boto.glacier.exceptions.UnexpectedHTTPResponseError as e:
             raise ResponseException(
-                'Failed to initiate an archive retrieval job for archive %s in vault %s.'% (archive_id, vault_name),
+                "Failed to initiate an archive retrieval "\
+                "job for archive %s in vault %s."% (archive_id, vault_name),
                 cause=self._decode_error_message(e.body),
                 code=e.code)
 
@@ -1343,24 +1359,30 @@ using %s MB parts to upload." % part_size)
                 download_job = job
                 if not job['Completed']:
                     raise CommunicationException(
-                        "Archive retrieval request not completed yet. Please try again later.",
+                        "Archive retrieval request not completed "\
+                        "yet. Please try again later.",
                         code='NotReady')
-                self.logger.debug('Archive retrieval completed; archive is available for download now.')
+                self.logger.debug("Archive retrieval completed; "\
+                                  "archive is available for "\
+                                  "download now.")
                 break
 
         else:
             raise InputException(
-                "Requested archive not available. Please make sure \
-your archive ID is correct, and start a retrieval job using \
-'getarchive' if necessary.",
+                "Requested archive not available. Please make sure "\
+                "your archive ID is correct, and start a retrieval "\
+                "job using getarchive' if necessary.",
                 code='IdError')
 
-        # Check whether we can access the file the archive has to be written to.
+        # Check whether we can access the file the archive
+        # has to be written to.
         out_file = None
         if out_file_name:
             if os.path.isfile(out_file_name) and not overwrite:
                 raise InputException(
-                    "File exists already, aborting. Use the overwrite flag to overwrite existing file.",
+                    "File exists already, aborting. "\
+                    "Use the overwrite flag to overwrite "\
+                    "existing file.",
                     code="FileError")
             try:
                 out_file = open(out_file_name, 'w')
@@ -1379,20 +1401,24 @@ your archive ID is correct, and start a retrieval job using \
 
         # Log our pending action.
         if out_file:
-            self.logger.debug('Starting download of archive to file %s.'% out_file_name)
+            self.logger.debug("Starting download of archive "\
+                              "to file %s."% out_file_name)
         else:
-            self.logger.debug('Starting download of archive to stdout.')
+            self.logger.debug("Starting download of archive to stdout.")
 
         # Download the data, one part at a time.
         while downloaded_size < total_size:
 
             # Read a part of data.
             from_bytes = downloaded_size
-            to_bytes = min(downloaded_size + part_size_in_bytes, total_size)
+            to_bytes = min(downloaded_size + part_size_in_bytes,
+                           total_size)
             try:
-                response = self.glacierconn.get_job_output(vault_name,
-                                                            download_job['JobId'],
-                                                            byte_range=(from_bytes, to_bytes-1))
+                response = self.glacierconn.get_job_output(
+                        vault_name,
+                        download_job['JobId'],
+                        byte_range=(from_bytes, to_bytes-1))
+
                 data = response.read()
             except boto.glacier.exceptions.UnexpectedHTTPResponseError as e:
                 raise ResponseException(
@@ -1460,7 +1486,8 @@ your archive ID is correct, and start a retrieval job using \
     @sdb_connect
     @log_class_call("Searching for archive.",
                     "Search done.")
-    def search(self, vault=None, region=None, file_name=None, search_term=None):
+    def search(self, vault=None, region=None,
+               file_name=None, search_term=None):
         """
         Searches for archives using SimpleDB
 
@@ -1494,17 +1521,6 @@ your archive ID is correct, and start a retrieval job using \
 
         if region:
             self._check_region(region)
-
-##        if file_name and ('"' in file_name or "'" in file_name):
-##            raise InputException(
-##                'Quotes like \' and \" are not allowed in search terms.',
-##                cause='Invalid search term %s: contains quotes.'% file_name)
-##
-##
-##        if search_term and ('"' in search_term or "'" in search_term):
-##            raise InputException(
-##                'Quotes like \' and \" are not allowed in search terms.',
-##                cause='Invalid search term %s: contains quotes.'% search_term)
 
         self.logger.debug('Search terms: vault %s, region %s, file name %s, search term %s'%
                           (vault, region, file_name, search_term))
@@ -1654,20 +1670,24 @@ your archive ID is correct, and start a retrieval job using \
 
             # If inventory retrieval is complete, process it.
             if inventory_done:
-                self.logger.debug('Fetching results of finished inventory retrieval.')
+                self.logger.debug("Fetching results of finished "\
+                                  "inventory retrieval.")
                 response = self.glacierconn.get_job_output(vault_name, inventory_job['JobId'])
                 inventory = response.copy()
                 archives = []
 
                 # If bookkeeping is enabled, update cache.
-                # Add all inventory information to the database, then check
-                # for any archives listed in the database for that vault and
+                # Add all inventory information to the database,
+                # then check for any archives listed
+                # in the database for that vault and
                 # remove those.
                 if self.bookkeeping and len(inventory['ArchiveList']) > 0:
-                    self.logger.debug('Updating the bookkeeping with the latest inventory.')
+                    self.logger.debug("Updating the bookkeeping "\
+                                      "with the latest inventory.")
                     items = {}
 
-                    # Add items to the inventory, 25 at a time (maximum batch).
+                    # Add items to the inventory, 25 at a time
+                    # (maximum batch).
                     for item in inventory['ArchiveList']:
                         items[item['ArchiveId']] = {
                             'vault': vault_name,
@@ -1680,12 +1700,15 @@ your archive ID is correct, and start a retrieval job using \
                             }
                         archives.append(item['ArchiveId'])
                         if len(items) == 25:
-                            self.logger.debug('Writing batch of 25 inventory items to the bookkeeping db.')
+                            self.logger.debug(
+                                "Writing batch of 25 inventory "\
+                                "items to the bookkeeping db.")
                             try:
                                 self.sdb_domain.batch_put_attributes(items)
                             except boto.exception.SDBResponseError as e:
                                 raise CommunicationException(
-                                    "Cannot update inventory cache, Amazon SimpleDB is not happy.",
+                                    "Cannot update inventory cache, "\
+                                    "Amazon SimpleDB is not happy.",
                                     cause=e,
                                     code="SdbWriteError")
                             items = {}
@@ -1693,46 +1716,57 @@ your archive ID is correct, and start a retrieval job using \
                     # Add the remaining batch of items, if any, to the
                     # database.
                     if items:
-                        self.logger.debug('Writing final batch of %s inventory items to the bookkeeping db.'% len(items))
+                        self.logger.debug("Writing final batch of %s "\
+                                "inventory items to the"\
+                                " bookkeeping db."% len(items))
                         try:
                             self.sdb_domain.batch_put_attributes(items)
                         except boto.exception.SDBResponseError as e:
                             raise CommunicationException(
-                                "Cannot update inventory cache, Amazon SimpleDB is not happy.",
+                                "Cannot update inventory cache, "\
+                                "Amazon SimpleDB is not happy.",
                                 cause=e,
                                 code="SdbWriteError")
 
-                    # Get the inventory from the database for this vault,
-                    # and delete any orphaned items.
+                    # Get the inventory from the database for this
+                    # vault, and delete any orphaned items.
                     query = "select * from `%s` where vault='%s'" % (self.bookkeeping_domain_name, vault_name)
                     result = self.sdb_domain.select(query)
                     try:
                         for item in result:
                             if not item.name in archives:
                                 self.sdb_domain.delete_item(item)
-                                self.logger.debug('Deleted orphaned archive from the database: %s.'% item.name)
+                                self.logger.debug(
+                                    "Deleted orphaned "\
+                                    "archive from the database: "\
+                                    "{}.".format(item.name))
 
                     except boto.exception.SDBResponseError as e:
                         raise ResponseException(
-                                'SimpleDB did not respond correctly to our inventory check.',
+                                "SimpleDB did not respond correctly "\
+                                "to our inventory check.",
                                 cause=self._decode_error_message(e.body),
                                 code=e.code)
 
-        # If refresh == True or no current inventory jobs either finished or
-        # in progress, we have to start a new job. Then request the job details
-        # through describejob to return.
+        # If refresh == True or no current inventory jobs either
+        # finished or in progress, we have to start a new job.
+        # Then request the job details through describejob to return.
         if refresh or not inventory_job:
-            self.logger.debug('No inventory jobs finished or running; starting a new job.')
+            self.logger.debug("No inventory jobs finished or "\
+                              "running; starting a new job.")
             job_data = {'Type': 'inventory-retrieval'}
             try:
-                new_job = self.glacierconn.initiate_job(vault_name, job_data)
+                new_job = self.glacierconn.initiate_job(vault_name,
+                                                        job_data)
             except boto.glacier.exceptions.UnexpectedHTTPResponseError as e:
                 raise ResponseException(
-                    'Failed to create a new inventory retrieval job for vault %s.'% vault_name,
+                    "Failed to create a new inventory retrieval "\
+                    "job for vault {}.".format(vault_name),
                     cause=self._decode_error_message(e.body),
                     code=e.code)
 
-            inventory_job = self.describejob(vault_name, new_job['JobId'])
+            inventory_job = self.describejob(vault_name,
+                                             new_job['JobId'])
 
         return (inventory_job, inventory)
 
@@ -1779,8 +1813,10 @@ your archive ID is correct, and start a retrieval job using \
                 result = dict()
 
             result["Vault Name"] = vault_name
-            result["Request Id"] = \
-                self._init_events_for_vault(vault_name, topic)[u'RequestId']
+            request_id = self._init_events_for_vault(vault_name, topic)
+            request_id = request_id[u'RequestId']
+            result["Request Id"] = request_id
+
             results += [result]
         return results
 
@@ -1824,7 +1860,7 @@ your archive ID is correct, and start a retrieval job using \
                             protocol, endpoint = method.split(',')
                         except ValueError:
                             raise InputException(
-                                ("If you specify method, you should use format "
+                                ("If you specify method, you should ""use format "
                                  "'protocol1,endpoint1;protocol2,endpoint2'."),
                                 cause='Wrong method format in configuration file.',
                                 code='SNSConfigurationError')
@@ -1872,7 +1908,7 @@ your archive ID is correct, and start a retrieval job using \
         if vault_names:
             vaults = vault_names.split(",")
             self._init_events_for_vaults(vaults, topic_arn)
-        
+
         topic_arns = [topic_arn]
 
         if len(topic_arns):
@@ -1884,7 +1920,9 @@ your archive ID is correct, and start a retrieval job using \
                                 'RequestId': result['ResponseMetadata']['RequestId']}]
                 return results
             except boto.exception.BotoServerError as e:
-                raise ResponseException("Failed to subscribe to notifications for vault %s." % vault_name,
+                raise ResponseException("Failed to subscribe to "\
+                                        "notifications for vault"\
+                                        " %s." % vault_name,
                     cause=self._decode_error_message(e.body),
                     code=e.code)
         else:
@@ -1894,7 +1932,7 @@ your archive ID is correct, and start a retrieval job using \
     @sns_connect
     def sns_list_topics(self, sns_options):
         topics = self.sns_conn.get_all_topics()['ListTopicsResponse']['ListTopicsResult']['Topics']
-        
+
         results = []
         for topic in topics:
             results += [{"Topic":topic['TopicArn'].split(":")[-1], "Topic ARN":topic['TopicArn']}]
@@ -1944,9 +1982,8 @@ your archive ID is correct, and start a retrieval job using \
                 code='SNSParameterError')
 
         matching_subs = self.sns_list_subscriptions(protocol,
-                                                    endpoint,
-                                                    topic,
-                                                    sns_options=sns_options)
+                                            endpoint, topic,
+                                            sns_options=sns_options)
 
         unsubscribed = []
         for res in matching_subs:
@@ -1957,8 +1994,9 @@ your archive ID is correct, and start a retrieval job using \
         return unsubscribed
 
     def __init__(self, aws_access_key, aws_secret_key, region,
-                 bookkeeping=False, no_bookkeeping=None, bookkeeping_domain_name=None,
-                 sdb_access_key=None, sdb_secret_key=None, sdb_region=None,
+                 bookkeeping=False, no_bookkeeping=None,
+                 bookkeeping_domain_name=None, sdb_access_key=None,
+                 sdb_secret_key=None, sdb_region=None,
                  logfile=None, loglevel='WARNING', logtostdout=True):
         """
         Constructor, sets up important variables and so for GlacierWrapper.

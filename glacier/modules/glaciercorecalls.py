@@ -12,8 +12,11 @@ This depends on the boto library, use version 2.6.0 or newer.
     writer.write(block of data)
     writer.close()
     # Get the id of the newly created archive
-    archive_id = writer.get_archive_id()from boto.connection import AWSAuthConnection
+    archive_id = writer.get_archive_id()from boto.connection
+    import AWSAuthConnection
 """
+
+# import modules
 
 import urllib
 import hashlib
@@ -21,10 +24,11 @@ import math
 import json
 import sys
 import time
-
 import boto.glacier.layer1
 
-from glacierexception import *
+# import our modules
+from modules import constants
+from modules.glacierexception import *
 
 # Placeholder, effectively renaming the class.
 class GlacierConnection(boto.glacier.layer1.Layer1):
@@ -37,7 +41,7 @@ def chunk_hashes(data):
     Break up the byte-string into 1MB chunks and return sha256 hashes
     for each.
     """
-    chunk = 1024*1024
+    chunk = constants.CHUNK_SIZE*constants.CHUNK_SIZE
     chunk_count = int(math.ceil(len(data)/float(chunk)))
     return [hashlib.sha256(data[i*chunk:(i+1)*chunk]).digest() for i in range(chunk_count)]
 
@@ -72,55 +76,47 @@ class GlacierWriter(object):
     Presents a file-like object for writing to a Amazon Glacier
     Archive. The data is written using the multi-part upload API.
     """
-    DEFAULT_PART_SIZE = 128 # in MB, power of 2.
-    # After every failed block upload we sleep (SLEEP_TIME * retries) seconds.
-    # The more retries we've made for one particular block, the longer we sleep
-    # before re-attempting to re-upload that block.
-    SLEEP_TIME = 300
-    # How many retries we should make to upload a particular block. We will not
-    # give up unless we've made at LEAST this many attempts to upload a block.
-    BLOCK_RETRIES = 10
-    # How many retries we should allow for the whole upload. We will not give up
-    # unless we've made at LEAST this many attempts to upload the archive.
-    TOTAL_RETRIES = 100
-    # For large files, the limits above could be surpassed. We also set a per-Gb
-    # criteria that allows more errors for larger uploads.
-    MAX_TOTAL_RETRY_PER_GB = 2
+
 
     def __init__(self, connection, vault_name,
-                 description=None, part_size_in_bytes=DEFAULT_PART_SIZE*1024*1024,
+                 description=None,
+                 part_size_in_bytes=constants.DEFAULT_PART_SIZE*1024*1024,
                  uploadid=None, logger=None):
 
         self.part_size = part_size_in_bytes
         self.vault_name = vault_name
         self.connection = connection
-##        self.location = None
         self.logger = logger
         self.total_retries = 0
 
         if uploadid:
             self.uploadid = uploadid
         else:
-            response = self.connection.initiate_multipart_upload(self.vault_name,
-                                                                 self.part_size,
-                                                                 description)
+            response = self.connection.initiate_multipart_upload(
+                    self.vault_name,
+                    self.part_size,
+                    description)
             self.uploadid = response['UploadId']
 
         self.uploaded_size = 0
         self.tree_hashes = []
         self.closed = False
-##        self.upload_url = response.getheader("location")
 
     def write(self, data):
 
         if self.closed:
             raise CommunicationError(
-                "Tried to write to a GlacierWriter that is already closed.",
+                "Tried to write to a GlacierWriter that is "\
+                "already closed.",
                 code='InternalError')
 
-        if len(data) > self.part_size:
+        len_data = len(data)
+        if len_data > self.part_size:
             raise InputException (
-                'Block of data provided must be equal to or smaller than the set block size.',
+                "Block of data provided({}) "\
+                "must be equal "
+                "to or smaller than the set "
+                "block size({}).".format(len_data, self.part_size),
                 code='InternalError')
 
         part_tree_hash = tree_hash(chunk_hashes(data))
@@ -128,8 +124,8 @@ class GlacierWriter(object):
         headers = {
                    "x-amz-glacier-version": "2012-06-01",
                     "Content-Range": "bytes %d-%d/*" % (self.uploaded_size,
-                                                       (self.uploaded_size+len(data))-1),
-                    "Content-Length": str(len(data)),
+                                                       (self.uploaded_size+len_data)-1),
+                    "Content-Length": str(len_data),
                     "Content-Type": "application/octet-stream",
                     "x-amz-sha256-tree-hash": bytes_to_hex(part_tree_hash),
                     "x-amz-content-sha256": hashlib.sha256(data).hexdigest()
@@ -140,30 +136,40 @@ class GlacierWriter(object):
 
         while True:
             try:
-                response = self.connection.upload_part(self.vault_name,
-                                        self.uploadid,
-                                        hashlib.sha256(data).hexdigest(),
-                                        bytes_to_hex(part_tree_hash),
-                                        (self.uploaded_size, self.uploaded_size+len(data)-1),
-                                        data)
+                response = self.connection.upload_part(
+                    self.vault_name,
+                    self.uploadid,
+                    hashlib.sha256(data).hexdigest(),
+                    bytes_to_hex(part_tree_hash),
+                    (self.uploaded_size, self.uploaded_size+len_data-1),
+                    data)
                 response.read()
                 break
 
             except Exception as e:
-                if '408' in e.message or e.code == "ServiceUnavailableException" or e.type == "Server":
-                    uploaded_gb = self.uploaded_size / (1024 * 1024 * 1024)
-                    if retries >= self.BLOCK_RETRIES and retries > math.log10(uploaded_gb) * 10:
+                if ('408' in e.message or
+                    e.code == "ServiceUnavailableException" or
+                    e.type == "Server"):
+
+                    uploaded_gb = self.uploaded_size / (1024 ** 1024)
+                    if (retries >= constants.BLOCK_RETRIES and
+                        retries > math.log10(uploaded_gb) * 10):
+
                         if self.logger:
-                            self.logger.warning('Retries exhausted for this block.')
+                            self.logger.warning("Retries exhausted "\
+                                                "({}) for this block.".format(constants.BLOCK_RETRIES))
                         raise e
 
                     if uploaded_gb > 0:
                         retry_per_gb = self.total_retries / uploaded_gb
                     else:
                         retry_per_gb = 0
-                    if self.total_retries >= self.TOTAL_RETRIES and retry_per_gb > self.MAX_TOTAL_RETRY_PER_GB:
+                    if (self.total_retries >= constants.TOTAL_RETRIES and
+                        retry_per_gb > constants.MAX_TOTAL_RETRY_PER_GB):
+
                         if self.logger:
-                            self.logger.warning('Total retries exhausted.')
+                            self.logger.warning("Total retries "\
+                                                "exhausted({}).".format(constants.TOTAL_RETRIES))
                         raise e
 
                     retries += 1
@@ -177,11 +183,11 @@ class GlacierWriter(object):
                             # Commify large numbers
                             self.logger.warning('Total uploaded size = {:,d}, block hash = {:}'.format(self.uploaded_size, bytes_to_hex(part_tree_hash)))
 
-                        self.logger.warning('Retries (this block, total) = %d/%d, %d/%d' % (retries, self.BLOCK_RETRIES, self.total_retries, self.TOTAL_RETRIES))
+                        self.logger.warning('Retries (this block, total) = %d/%d, %d/%d' % (retries, constants.BLOCK_RETRIES, self.total_retries, constants.TOTAL_RETRIES))
                         self.logger.warning('Check the AWS status at: http://status.aws.amazon.com/')
-                        self.logger.warning('Sleeping %d seconds (%.1f minutes) before retrying this block.' % (self.SLEEP_TIME, self.SLEEP_TIME / 60.0))
+                        self.logger.warning('Sleeping %d seconds (%.1f minutes) before retrying this block.' % (constants.SLEEP_TIME, constants.SLEEP_TIME / 60.0))
 
-                    time.sleep(self.SLEEP_TIME * retries)
+                    time.sleep(constants.SLEEP_TIME * retries)
 
                 else:
                     self.logger.warning(e.message)
@@ -196,10 +202,11 @@ class GlacierWriter(object):
             return
 
         # Complete the multiplart glacier upload
-        response = self.connection.complete_multipart_upload(self.vault_name,
-                                                             self.uploadid,
-                                                             bytes_to_hex(tree_hash(self.tree_hashes)),
-                                                             self.uploaded_size)
+        response = self.connection.complete_multipart_upload(
+                self.vault_name,
+                self.uploadid,
+                bytes_to_hex(tree_hash(self.tree_hashes)),
+                self.uploaded_size)
         self.archive_id = response['ArchiveId']
         self.location = response['Location']
         self.hash_sha256 = bytes_to_hex(tree_hash(self.tree_hashes))
