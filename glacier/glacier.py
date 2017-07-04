@@ -22,9 +22,10 @@ from modules.glacier_utils import (default_glacier_wrapper, size_fmt,
 from modules.sns_utils import (snssync, snssubscribe,
         snslistsubscriptions, snslisttopics, snsunsubscribe)
 from modules.decorators import handle_errors
-from modules import glacierexception
-from modules import constants
+from modules import glacierexception, constants
 from modules.GlacierWrapper import GlacierWrapper
+
+# function definition
 
 @handle_errors
 def lsvault(args):

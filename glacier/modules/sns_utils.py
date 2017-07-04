@@ -2,6 +2,10 @@
 # -*- coding: utf-8 -*-
 
 # import modules
+from modules.glacier_utils import default_glacier_wrapper
+
+# function definition
+
 def snssync(args):
     """
     If monitored_vaults is specified in configuration file, subscribe
@@ -41,12 +45,15 @@ def snslistsubscriptions(args):
     topic = args.topic
 
     glacier = default_glacier_wrapper(args)
-    response = glacier.sns_list_subscriptions(protocol, endpoint,
-                                              topic,
-                                              sns_options=args.sns_options)
+    response = glacier.sns_list_subscriptions(protocol,
+                    endpoint, topic, sns_options=args.sns_options)
     output_table(response, args.output)
 
 def snslisttopics(args):
+    """
+    List subscriptions.
+    """
+
     glacier = default_glacier_wrapper(args)
     response = glacier.sns_list_topics(sns_options=args.sns_options)
     output_table(response, args.output)
@@ -63,6 +70,5 @@ def snsunsubscribe(args):
 
     glacier = default_glacier_wrapper(args)
     response = glacier.sns_unsubscribe(protocol, endpoint,
-                                       topic,
-                                       sns_options=args.sns_options)
+                    topic, sns_options=args.sns_options)
     output_table(response, args.output)

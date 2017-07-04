@@ -28,13 +28,12 @@ import boto.glacier.layer1
 
 # import our modules
 from modules import constants
-from modules.glacierexception import *
+from modules import glacierexception
 
 # Placeholder, effectively renaming the class.
 class GlacierConnection(boto.glacier.layer1.Layer1):
 
     pass
-
 
 def chunk_hashes(data):
     """
@@ -105,14 +104,14 @@ class GlacierWriter(object):
     def write(self, data):
 
         if self.closed:
-            raise CommunicationError(
+            raise glacierexception.CommunicationError(
                 "Tried to write to a GlacierWriter that is "\
                 "already closed.",
                 code='InternalError')
 
         len_data = len(data)
         if len_data > self.part_size:
-            raise InputException (
+            raise glacierexception.InputException (
                 "Block of data provided({}) "\
                 "must be equal "
                 "to or smaller than the set "
@@ -157,7 +156,8 @@ class GlacierWriter(object):
 
                         if self.logger:
                             self.logger.warning("Retries exhausted "\
-                                                "({}) for this block.".format(constants.BLOCK_RETRIES))
+                                "({}) for this "\
+                                "block.".format(constants.BLOCK_RETRIES))
                         raise e
 
                     if uploaded_gb > 0:
@@ -169,7 +169,8 @@ class GlacierWriter(object):
 
                         if self.logger:
                             self.logger.warning("Total retries "\
-                                                "exhausted({}).".format(constants.TOTAL_RETRIES))
+                                "exhausted"\
+                                "({}).".format(constants.TOTAL_RETRIES))
                         raise e
 
                     retries += 1
@@ -178,13 +179,24 @@ class GlacierWriter(object):
                     if self.logger:
                         self.logger.warning(e.message)
                         if sys.version_info < (2, 7, 0):
-                            self.logger.warning('Total uploaded size = %d, block hash = %s' % (self.uploaded_size, bytes_to_hex(part_tree_hash)))
+                            self.logger.warning("Total uploaded size "
+                                "= {}, block hash = "
+                                "{}".format(self.uploaded_size,
+                                        bytes_to_hex(part_tree_hash)))
                         else:
                             # Commify large numbers
-                            self.logger.warning('Total uploaded size = {:,d}, block hash = {:}'.format(self.uploaded_size, bytes_to_hex(part_tree_hash)))
+                            self.logger.warning("Total uploaded size "
+                                "= {:,d}, block hash = "
+                                "{:}".format(self.uploaded_size,
+                                        bytes_to_hex(part_tree_hash)))
 
-                        self.logger.warning('Retries (this block, total) = %d/%d, %d/%d' % (retries, constants.BLOCK_RETRIES, self.total_retries, constants.TOTAL_RETRIES))
-                        self.logger.warning('Check the AWS status at: http://status.aws.amazon.com/')
+                        self.logger.warning("Retries (this block, "
+                            "total) = {}/{}, {}/{}".format(retries,
+                                    constants.BLOCK_RETRIES,
+                                    self.total_retries,
+                                    constants.TOTAL_RETRIES))
+                        self.logger.warning("Check the AWS status "
+                                    "at: http://status.aws.amazon.com/")
                         self.logger.warning('Sleeping %d seconds (%.1f minutes) before retrying this block.' % (constants.SLEEP_TIME, constants.SLEEP_TIME / 60.0))
 
                     time.sleep(constants.SLEEP_TIME * retries)

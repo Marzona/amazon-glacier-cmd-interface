@@ -38,7 +38,7 @@ from pprint import pformat
 
 from modules import constants
 from modules.glaciercorecalls import GlacierConnection, GlacierWriter
-
+from modules import glacierexception
 
 class log_class_call(object):
     """
@@ -212,7 +212,7 @@ class GlacierWrapper(object):
                                                          self.aws_secret_key,
                                                          region_name=self.region)
                 except boto.exception.AWSConnectionError as e:
-                    raise ConnectionException(
+                    raise glacierexception.ConnectionException(
                         "Cannot connect to Amazon Glacier.",
                         cause=e.cause,
                         code="GlacierConnectionError")
@@ -244,7 +244,7 @@ class GlacierWrapper(object):
             # we need to glaciercorecalls?
 
             if not self.bookkeeping_domain_name:
-                raise InputException(
+                raise glacierexception.InputException(
                     '''\
 Bookkeeping enabled but no Amazon SimpleDB domain given.
 Provide a domain in either the config file or via the
@@ -267,8 +267,9 @@ aws_secret_key %s\
                         aws_secret_access_key=self.sdb_secret_key)
                     domain_name = self.bookkeeping_domain_name
                     self.sdb_domain = self.sdb_conn.create_domain(domain_name)
-                except (boto.exception.AWSConnectionError, boto.exception.SDBResponseError) as e:
-                    raise ConnectionException(
+                except (boto.exception.AWSConnectionError,
+                                boto.exception.SDBResponseError) as e:
+                    raise glacierexception.ConnectionException(
                         "Cannot connect to Amazon SimpleDB.",
                         cause=e,
                         code="SdbConnectionError")
@@ -299,7 +300,7 @@ aws_secret_key %s\
                         aws_secret_access_key=self.aws_secret_key,
                         region_name=self.region)
                 except boto.exception.AWSConnectionError as e:
-                    raise ConnectionException(
+                    raise glacierexception.ConnectionException(
                         "Cannot connect to Amazon SNS.",
                         cause=e.cause,
                         code="SNSConnectionError")
@@ -321,13 +322,15 @@ aws_secret_key %s\
         """
 
         if len(name) > constants.MAX_VAULT_NAME_LENGTH:
-            raise InputException(
-                u"Vault name can be at most %s characters long." % constants.MAX_VAULT_NAME_LENGTH,
-                cause="Vault name more than %s characters long." % constants.MAX_VAULT_NAME_LENGTH,
+            raise glacierexception.InputException(
+                "Vault name can be at most {} characters "\
+                "long.".format(onstants.MAX_VAULT_NAME_LENGTH),
+                cause="Vault name more than {} characters "\
+                "long.".format(constants.MAX_VAULT_NAME_LENGTH),
                 code="VaultNameError")
 
         if len(name) == 0:
-            raise InputException(
+            raise glacierexception.InputException(
                 u"Vault name has to be at least 1 character long.",
                 cause='Vault name has to be at least 1 character long.',
                 code="VaultNameError")
@@ -337,7 +340,7 @@ aws_secret_key %s\
         # which of course is always True.
         m = re.match(constants.VAULT_NAME_ALLOWED_CHARACTERS, name)
         if (m.end() if m else 0) != len(name):
-            raise InputException(
+            raise glacierexception.InputException(
                 u"allowed characters are a-z, A-Z, 0-9, '_' "\
                 "(underscore), '-' (hyphen), and '.' (period)",
                 cause='Illegal characters in the vault name.',
@@ -361,15 +364,17 @@ aws_secret_key %s\
         """
 
         if len(description) > constants.MAX_VAULT_DESCRIPTION_LENGTH:
-            raise InputException(
-                u"Description must be no more than %s characters."% constants.MAX_VAULT_DESCRIPTION_LENGTH,
-                cause='Vault description contains more than %s characters.'% constants.MAX_VAULT_DESCRIPTION_LENGTH,
+            raise glacierexception.InputException(
+                "Description must be no more than {} characters"\
+                ".".format(constants.MAX_VAULT_DESCRIPTION_LENGTH),
+                cause='Vault description contains more than {} "\
+                "characters.'.format(constants.MAX_VAULT_DESCRIPTION_LENGTH),
                 code="VaultDescriptionError")
 
         for char in description:
             n = ord(char)
             if n < 32 or n > 126:
-                raise InputException(
+                raise glacierexception.InputException(
                     u"The allowed characters are 7-bit ASCII without "\
                     "control codes, specifically ASCII values 32-126 "\
                     "decimal or 0x20-0x7E hexadecimal.",
@@ -401,20 +406,23 @@ aws_secret_key %s\
         length = {'JobId': 92,
                   'UploadId': 92,
                   'ArchiveId': 138}
-        self.logger.debug('Checking a %s.' % id_type)
+        self.logger.debug('Checking a {}.'.format(id_type))
         if len(amazon_id) != length[id_type]:
-            raise InputException(
-                'A %s must be %s characters long. This ID is %s characters.'% (id_type, length[id_type], len(amazon_id)),
-                cause='Incorrect length of the %s string.'% id_type,
+            raise glacierexception.InputException(
+                'A {} must be {} characters long. This ID is {} "\
+                "characters.'.format(id_type,
+                                     length[id_type],
+                                     len(amazon_id)),
+                cause='Incorrect length of the {} string.'.format(id_type),
                 code="IdError")
 
         m = re.match(constants.ID_ALLOWED_CHARACTERS, amazon_id)
         if (m.end() if m else 0) != len(amazon_id):
-            raise InputException(u"""\
-This %s contains invalid characters. \
+            raise glacierexception.InputException(u"""\
+This {} contains invalid characters. \
 Allowed characters are a-z, A-Z, 0-9, '_' (underscore) and '-' (hyphen)\
-""" % id_type,
-                cause='Illegal characters in the %s string.' % id_type,
+""".format(id_type),
+                cause='Illegal characters in the {} string.'.format(id_type),
                 code="IdError")
 
         return True
@@ -434,9 +442,9 @@ Allowed characters are a-z, A-Z, 0-9, '_' (underscore) and '-' (hyphen)\
         """
 
         if not region in constants.AVAILABLE_REGIONS:
-            raise InputException(
+            raise glacierexception.InputException(
                 constants.AVAILABLE_REGIONS_MESSAGE,
-                cause='Invalid region code: %s.' % region,
+                cause='Invalid region code: {}.'.format(region),
                 code='RegionError')
 
         return True
@@ -471,14 +479,14 @@ Allowed characters are a-z, A-Z, 0-9, '_' (underscore) and '-' (hyphen)\
                                     "power of 2, "\
                                     "e.g. 1, 2, 4, 8 MB; "\
                                     "automatically increased part "\
-                                    "size from %s to %s." % (part_size, ps))
+                                    "size from {} to {}.".format(part_size, ps))
             part_size = ps
 
         # Check if user specified value is big enough, and adjust if needed.
         if total_size > part_size * 1024 * 1024 * constants.MAX_PARTS:
             part_size = _part_size_for_total_size(total_size)
             self.logger.warning("Part size given is too small; \
-using %s MB parts to upload." % part_size)
+using {} MB parts to upload.".format(part_size))
 
         return part_size
 
@@ -602,7 +610,7 @@ using %s MB parts to upload." % part_size)
             try:
                 response = self.glacierconn.list_vaults(marker=marker)
             except boto.glacier.exceptions.UnexpectedHTTPResponseError as e:
-                raise ResponseException(
+                raise glacierexception.ResponseException(
                     'Failed to recieve vault list.',
                     cause=self._decode_error_message(e.body),
                     code=e.code)
@@ -637,8 +645,8 @@ using %s MB parts to upload." % part_size)
         try:
             response = self.glacierconn.create_vault(vault_name)
         except boto.glacier.exceptions.UnexpectedHTTPResponseError as e:
-            raise ResponseException(
-                'Failed to create vault with name %s.' % vault_name,
+            raise glacierexception.ResponseException(
+                'Failed to create vault with name {}.'.format(vault_name),
                 cause=self._decode_error_message(e.body),
                 code=e.code)
 
@@ -670,22 +678,25 @@ using %s MB parts to upload." % part_size)
         try:
             response = self.glacierconn.delete_vault(vault_name)
         except boto.glacier.exceptions.UnexpectedHTTPResponseError as e:
-            raise ResponseException(
-                'Failed to remove vault with name %s.' % vault_name,
+            raise glacierexception.ResponseException(
+                'Failed to remove vault with name {}.'.format(vault_name),
                 cause=self._decode_error_message(e.body),
                 code=e.code)
 
         # Check for orphaned entries in the bookkeeping database, and
         # remove them.
         if self.bookkeeping:
-            query = "select * from `%s` where vault='%s'" % (self.bookkeeping_domain_name, vault_name)
+            query = "select * from `{}` where "\
+            "vault='{}'".format(self.bookkeeping_domain_name,
+                                vault_name)
             result = self.sdb_domain.select(query)
             try:
                 for item in result:
                     self.sdb_domain.delete_item(item)
-                    self.logger.debug('Deleted orphaned archive from the database: %s.' % item.name)
+                    self.logger.debug("Deleted orphaned archive from "\
+                                "the database: {}.".format(item.name))
             except boto.exception.SDBResponseError as e:
-                raise ResponseException(
+                raise glacierexception.ResponseException(
                         "SimpleDB did not respond correctly to "\
                         "our orphaned listings check.",
                         cause=self._decode_error_message(e.body),
@@ -722,8 +733,8 @@ using %s MB parts to upload." % part_size)
         try:
             response = self.glacierconn.describe_vault(vault_name)
         except boto.glacier.exceptions.UnexpectedHTTPResponseError as e:
-            raise ResponseException(
-                'Failed to get description of vault with name %s.' % vault_name,
+            raise glacierexception.ResponseException(
+                'Failed to get description of vault with name {}.'.format(vault_name),
                 cause=self._decode_error_message(e.body),
                 code=e.code)
 
@@ -777,8 +788,9 @@ using %s MB parts to upload." % part_size)
                         status_code=status_code,
                         marker=marker)
             except boto.glacier.exceptions.UnexpectedHTTPResponseError as e:
-                raise ResponseException(
-                    'Failed to recieve the jobs list for vault %s.' % vault_name,
+                raise glacierexception.ResponseException(
+                    "Failed to recieve the jobs list for vault "\
+                    "{}.".format(vault_name),
                     cause=self._decode_error_message(e.body),
                     code=e.code)
             job_list += response.copy()['JobList']
@@ -832,8 +844,8 @@ using %s MB parts to upload." % part_size)
         try:
             response = self.glacierconn.describe_job(vault_name, job_id)
         except boto.glacier.exceptions.UnexpectedHTTPResponseError as e:
-            raise ResponseException(
-                'Failed to get description of job with job id %s.' % job_id,
+            raise glacierexception.ResponseException(
+                'Failed to get description of job with job id {}.'.format(job_id),
                 cause=self._decode_error_message(e.body),
                 code=e.code)
 
@@ -871,8 +883,8 @@ using %s MB parts to upload." % part_size)
                     vault_name,
                     upload_id)
         except boto.glacier.exceptions.UnexpectedHTTPResponseError as e:
-            raise ResponseException(
-                'Failed to abort multipart upload with id %s.' % upload_id,
+            raise glacierexception.ResponseException(
+                'Failed to abort multipart upload with id {}.'.format(upload_id),
                 cause=self._decode_error_message(e.body),
                 code=e.code)
 
@@ -911,8 +923,8 @@ using %s MB parts to upload." % part_size)
                 response = self.glacierconn.list_multipart_uploads(vault_name,
                                                                    marker=marker)
             except boto.glacier.exceptions.UnexpectedHTTPResponseError as e:
-                raise ResponseException(
-                    'Failed to get a list of multipart uploads for vault %s.' % vault_name,
+                raise glacierexception.ResponseException(
+                    'Failed to get a list of multipart uploads for vault {}.'.format(vault_name),
                     cause=self._decode_error_message(e.body),
                     code=e.code)
 
@@ -973,7 +985,7 @@ using %s MB parts to upload." % part_size)
             self._check_id(uploadid, 'UploadId')
 
         if resume and stdin:
-            raise InputException(
+            raise glacierexception.InputException(
                 "You must provide the UploadId to "\
                 "resume upload of streams from "\
                 "stdin.\nUse glacier-cmd "\
@@ -994,7 +1006,7 @@ using %s MB parts to upload." % part_size)
 
         if not stdin and not is_pipe:
             if not file_name:
-                raise InputException(
+                raise glacierexception.InputException(
                     "No file name given for upload.",
                     code='CommandError')
 
@@ -1003,8 +1015,8 @@ using %s MB parts to upload." % part_size)
                 mmapped_file = mmap(f)
                 total_size = os.path.getsize(file_name)
             except IOError as e:
-                raise InputException(
-                    "Could not access file: %s."% file_name,
+                raise glacierexception.InputException(
+                    "Could not access file: {}.".format(file_name),
                     cause=e,
                     code='FileError')
 
@@ -1013,25 +1025,25 @@ using %s MB parts to upload." % part_size)
                 reader = open(file_name, 'rb')
                 total_size = 0
             except IOError:
-                raise InputException(
-                    "Could not access pipe: %s."% file_name,
+                raise glacierexception.InputException(
+                    "Could not access pipe: {}.".format(file_name),
                     cause = e, code = 'FileError')
 
         elif select.select([sys.stdin,],[],[],0.0)[0]:
             reader = sys.stdin
             total_size = 0
         else:
-            raise InputException(
+            raise glacierexception.InputException(
                 "There is nothing to upload.",
                 code='CommandError')
 
         # Log the kind of upload we're going to do.
         if uploadid:
-            self.logger.info('Attempting resumption of upload of %s to %s.'% (file_name if file_name else 'data from stdin', vault_name))
+            self.logger.info('Attempting resumption of upload of %s to {}.'.format(file_name if file_name else 'data from stdin', vault_name))
         elif resume:
-            self.logger.info('Attempting resumption of upload of %s to %s.'% (file_name, vault_name))
+            self.logger.info('Attempting resumption of upload of {} to {}.'.format(file_name, vault_name))
         else:
-            self.logger.info('Starting upload of %s to %s.\nDescription: %s'% (file_name if file_name else 'data from stdin', vault_name, description))
+            self.logger.info('Starting upload of {} to {}.\nDescription: {}'.format(file_name if file_name else 'data from stdin', vault_name, description))
 
         # If user did not specify part_size, compute the
         # optimal (i.e. lowest value to stay within the
@@ -1054,7 +1066,7 @@ using %s MB parts to upload." % part_size)
                     part_size_in_bytes = upload['PartSizeInBytes']
                     break
             else:
-                raise InputException(
+                raise glacierexception.InputException(
                             "Can not resume upload of "\
                             "this data as no existing "\
                             "job with this uploadid "\
@@ -1079,7 +1091,7 @@ using %s MB parts to upload." % part_size)
                             uploadid,
                             marker=marker)
                 except boto.glacier.exceptions.UnexpectedHTTPResponseError as e:
-                    raise ResponseException(
+                    raise glacierexception.ResponseException(
                         "Failed to get a list "\
                         "already uploaded parts "\
                         "for interrupted "\
@@ -1104,7 +1116,7 @@ using %s MB parts to upload." % part_size)
                     stop += 1
                     if not start == current_position:
                         if stdin or is_pipe:
-                            raise InputException(
+                            raise glacierexception.InputException(
                                 "Cannot verify non-sequential upload "\
                                 "data from stdin or pipe.",
                                 code='ResumeError')
@@ -1112,7 +1124,7 @@ using %s MB parts to upload." % part_size)
                             reader.seek(start)
 
                     if mmapped_file and stop > mmapped_file.size:
-                        raise InputException(
+                        raise glacierexception.InputException(
                             constants.UPLOAD_DATA_ERROR_MSG,
                             cause="File is smaller than uploaded data.",
                             code='ResumeError')
@@ -1127,16 +1139,16 @@ using %s MB parts to upload." % part_size)
                     if data:
                         data_hash = glaciercorecalls.tree_hash(glaciercorecalls.chunk_hashes(data))
                         if glaciercorecalls.bytes_to_hex(data_hash) == part['SHA256TreeHash']:
-                            self.logger.debug('Part %s hash matches.'% part['RangeInBytes'])
+                            self.logger.debug('Part {} hash matches.'.format(part['RangeInBytes']))
                             writer.tree_hashes.append(data_hash)
                         else:
-                            raise InputException(
+                            raise glacierexception.InputException(
                                 constants.UPLOAD_DATA_ERROR_MSG,
                                 cause="SHA256 hash mismatch.",
                                 code="ResumeError")
 
                     else:
-                        raise InputException(
+                        raise glacierexception.InputException(
                             constants.UPLOAD_DATA_ERROR_MSG,
                             cause='No or not enough data to match.',
                             code='ResumeError')
@@ -1156,22 +1168,22 @@ using %s MB parts to upload." % part_size)
                              self._size_fmt(total_size),
                              self._bold(str(int(100 * writer.uploaded_size/total_size))))
                 else:
-                    msg = 'Checked %s.' \
-                          % (self._size_fmt(writer.uploaded_size))
+                    msg = "Checked "\
+                          "{}.".format(self._size_fmt(writer.uploaded_size))
 
                 self._progress(msg)
 
             # Finished checking; log this and print the final
             # status update before resuming the upload.
-            self.logger.info('Already uploaded: %s. Continuing from there.'% self._size_fmt(stop))
+            self.logger.info("Already uploaded: {}"\
+                             ". Continuing from there.".format(self._size_fmt(stop)))
             if total_size > 0:
                 msg = 'Checked %s of %s (%s%%). Check done; resuming upload.' \
                       % (self._size_fmt(writer.uploaded_size),
                          self._size_fmt(total_size),
                          self._bold(str(int(100 * writer.uploaded_size/total_size))))
             else:
-                msg = 'Checked %s. Check done; resuming upload.' \
-                      % (self._size_fmt(writer.uploaded_size))
+                msg = "Checked {}. Check done; resuming upload.".format(self._size_fmt(writer.uploaded_size))
 
             self._progress(msg)
 
@@ -1327,9 +1339,9 @@ using %s MB parts to upload." % part_size)
         try:
             response = self.glacierconn.initiate_job(vault_name, job_data)
         except boto.glacier.exceptions.UnexpectedHTTPResponseError as e:
-            raise ResponseException(
+            raise glacierexception.ResponseException(
                 "Failed to initiate an archive retrieval "\
-                "job for archive %s in vault %s."% (archive_id, vault_name),
+                "job for archive {} in vault {}.".format(archive_id, vault_name),
                 cause=self._decode_error_message(e.body),
                 code=e.code)
 
@@ -1358,7 +1370,7 @@ using %s MB parts to upload." % part_size)
             if job['ArchiveId'] == archive_id:
                 download_job = job
                 if not job['Completed']:
-                    raise CommunicationException(
+                    raise glacierexception.CommunicationException(
                         "Archive retrieval request not completed "\
                         "yet. Please try again later.",
                         code='NotReady')
@@ -1368,7 +1380,7 @@ using %s MB parts to upload." % part_size)
                 break
 
         else:
-            raise InputException(
+            raise glacierexception.InputException(
                 "Requested archive not available. Please make sure "\
                 "your archive ID is correct, and start a retrieval "\
                 "job using getarchive' if necessary.",
@@ -1379,7 +1391,7 @@ using %s MB parts to upload." % part_size)
         out_file = None
         if out_file_name:
             if os.path.isfile(out_file_name) and not overwrite:
-                raise InputException(
+                raise glacierexception.InputException(
                     "File exists already, aborting. "\
                     "Use the overwrite flag to overwrite "\
                     "existing file.",
@@ -1387,7 +1399,7 @@ using %s MB parts to upload." % part_size)
             try:
                 out_file = open(out_file_name, 'w')
             except IOError as e:
-                raise InputException(
+                raise glacierexception.InputException(
                     "Cannot access the ouput file.",
                     cause=e,
                     code='FileError')
@@ -1402,7 +1414,7 @@ using %s MB parts to upload." % part_size)
         # Log our pending action.
         if out_file:
             self.logger.debug("Starting download of archive "\
-                              "to file %s."% out_file_name)
+                              "to file {}.".format(out_file_name))
         else:
             self.logger.debug("Starting download of archive to stdout.")
 
@@ -1421,8 +1433,8 @@ using %s MB parts to upload." % part_size)
 
                 data = response.read()
             except boto.glacier.exceptions.UnexpectedHTTPResponseError as e:
-                raise ResponseException(
-                    'Failed to download archive %s.'% archive_id,
+                raise glacierexception.ResponseException(
+                    'Failed to download archive {}.'.format(archive_id),
                     cause=self._decode_error_message(e.body),
                     code=e.code)
 
@@ -1432,7 +1444,7 @@ using %s MB parts to upload." % part_size)
                 try:
                     out_file.write(response.read())
                 except IOError as e:
-                    raise InputException(
+                    raise glacierexception.InputException(
                         "Cannot write data to the specified file.",
                         cause=e,
                         code='FileError')
@@ -1469,7 +1481,7 @@ using %s MB parts to upload." % part_size)
         if out_file:
             out_file.close()
         if glaciercorecalls.bytes_to_hex(glaciercorecalls.tree_hash(hash_list)) != download_job['SHA256TreeHash']:
-            raise CommunicationException(
+            raise glacierexception.CommunicationException(
                 "Downloaded data hash mismatch",
                 code="DownloadError",
                 cause=None)
@@ -1511,7 +1523,7 @@ using %s MB parts to upload." % part_size)
 
         # Sanity checking.
         if not self.bookkeeping:
-            raise InputException(
+            raise glacierexception.InputException(
                 "You must enable bookkeeping to be able to do searches.",
                 cause='Bookkeeping not enabled.',
                 code='BookkeepingError')
@@ -1555,7 +1567,7 @@ using %s MB parts to upload." % part_size)
                 if item.has_key('archive_id'):
                     items.append(item)
         except boto.exception.SDBResponseError as e:
-            raise ResponseException(
+            raise glacierexception.ResponseException(
                     'SimpleDB did not like your query with parameters %s.'% search_params,
                     cause=self._decode_error_message(e.body),
                     code=e.code)
@@ -1583,7 +1595,7 @@ using %s MB parts to upload." % part_size)
         try:
             self.glacierconn.delete_archive(vault_name, archive_id)
         except boto.glacier.exceptions.UnexpectedHTTPResponseError as e:
-            raise ResponseException(
+            raise glacierexception.ResponseException(
                 'Failed to remove archive %s from vault %s.'% (archive_id, vault_name),
                 cause=self._decode_error_message(e.body),
                 code=e.code)
@@ -1595,7 +1607,7 @@ using %s MB parts to upload." % part_size)
                 if item:
                     self.sdb_domain.delete_item(item)
             except boto.exception.SDBResponseError as e:
-                raise CommunicationException(
+                raise glacierexception.CommunicationException(
                     "Cannot delete item from Amazon SimpleDB.",
                     code="SdbWriteError",
                     cause=e)
@@ -1706,7 +1718,7 @@ using %s MB parts to upload." % part_size)
                             try:
                                 self.sdb_domain.batch_put_attributes(items)
                             except boto.exception.SDBResponseError as e:
-                                raise CommunicationException(
+                                raise glacierexception.CommunicationException(
                                     "Cannot update inventory cache, "\
                                     "Amazon SimpleDB is not happy.",
                                     cause=e,
@@ -1722,7 +1734,7 @@ using %s MB parts to upload." % part_size)
                         try:
                             self.sdb_domain.batch_put_attributes(items)
                         except boto.exception.SDBResponseError as e:
-                            raise CommunicationException(
+                            raise glacierexception.CommunicationException(
                                 "Cannot update inventory cache, "\
                                 "Amazon SimpleDB is not happy.",
                                 cause=e,
@@ -1742,7 +1754,7 @@ using %s MB parts to upload." % part_size)
                                     "{}.".format(item.name))
 
                     except boto.exception.SDBResponseError as e:
-                        raise ResponseException(
+                        raise glacierexception.ResponseException(
                                 "SimpleDB did not respond correctly "\
                                 "to our inventory check.",
                                 cause=self._decode_error_message(e.body),
@@ -1759,7 +1771,7 @@ using %s MB parts to upload." % part_size)
                 new_job = self.glacierconn.initiate_job(vault_name,
                                                         job_data)
             except boto.glacier.exceptions.UnexpectedHTTPResponseError as e:
-                raise ResponseException(
+                raise glacierexception.ResponseException(
                     "Failed to create a new inventory retrieval "\
                     "job for vault {}.".format(vault_name),
                     cause=self._decode_error_message(e.body),
@@ -1784,7 +1796,7 @@ using %s MB parts to upload." % part_size)
         try:
             reader = open(file_name, 'rb')
         except IOError as e:
-            raise InputException(
+            raise glacierexception.InputException(
                 "Could not access the file given: %s." % file_name,
                 cause=e,
                 code='FileError')
@@ -1859,7 +1871,7 @@ using %s MB parts to upload." % part_size)
                         try:
                             protocol, endpoint = method.split(',')
                         except ValueError:
-                            raise InputException(
+                            raise glacierexception.InputException(
                                 ("If you specify method, you should ""use format "
                                  "'protocol1,endpoint1;protocol2,endpoint2'."),
                                 cause='Wrong method format in configuration file.',
@@ -1920,7 +1932,7 @@ using %s MB parts to upload." % part_size)
                                 'RequestId': result['ResponseMetadata']['RequestId']}]
                 return results
             except boto.exception.BotoServerError as e:
-                raise ResponseException("Failed to subscribe to "\
+                raise glacierexception.ResponseException("Failed to subscribe to "\
                                         "notifications for vault"\
                                         " %s." % vault_name,
                     cause=self._decode_error_message(e.body),
@@ -1975,7 +1987,7 @@ using %s MB parts to upload." % part_size)
     @sns_connect
     def sns_unsubscribe(self, protocol, endpoint, topic, sns_options):
         if not protocol or not endpoint or not topic:
-            raise InputException(
+            raise glacierexception.InputException(
                 ("You must specify at least one parameter that will "
                  "by which subscriptions will be canceled."),
                 cause='No parameters given for unsubscribe.',

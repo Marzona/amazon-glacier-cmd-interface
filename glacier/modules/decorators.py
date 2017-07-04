@@ -11,6 +11,7 @@ def handle_errors(fn):
     """
     Decorator for exception handling.
     """
+
     @wraps(fn)
     def wrapper(*args, **kwargs):
         try:

@@ -1,4 +1,3 @@
-
 # constants definition
 CHUNK_SIZE = 1024
 DEFAULT_PART_SIZE = 128 # in MB, power of 2.

@@ -53,7 +53,7 @@ class GlacierException(Exception):
         self.exitcode = constants.ERRORCODE[code] if code in constants.ERRORCODE else 254
         self.code = code
         if cause:
-            self.logger.error('ERROR: %s'% cause)
+            self.logger.error('ERROR:{}'.format(cause))
             self.cause = cause if isinstance(cause, tuple) else (cause,)
             self.stack = traceback.format_stack()[:-2]
 
@@ -73,7 +73,7 @@ class GlacierException(Exception):
         self.logger.info(self.fetch(message=True))
         self.logger.debug(self.fetch(stack=True))
         if self.exitcode == 254:
-            self.logger.debug('Unknown error code: %s.'% code)
+            self.logger.debug('Unknown error code: {}'.format(code))
 
     # Works as a generator to help get the stack trace and the cause
     # written out.
