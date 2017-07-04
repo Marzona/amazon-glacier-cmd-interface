@@ -141,7 +141,7 @@ class GlacierException(Exception):
         out = ''
         for line in self.causeTree(indentation,
                                    message=message,
-                                   tack=stack):
+                                   stack=stack):
             out += line
 
         return out
