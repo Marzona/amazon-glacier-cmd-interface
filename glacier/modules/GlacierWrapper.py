@@ -37,7 +37,7 @@ from pprint import pformat
 # import our modules
 
 from modules import constants
-from modules.glaciercorecalls import GlacierConnection, GlacierWriter
+from modules import glaciercorecalls
 from modules import glacierexception
 
 class log_class_call(object):
@@ -208,9 +208,8 @@ class GlacierWrapper(object):
                                       self.aws_access_key,
                                       self.aws_secret_key,
                                       self.region)
-                    self.glacierconn = GlacierConnection(self.aws_access_key,
-                                                         self.aws_secret_key,
-                                                         region_name=self.region)
+                    self.glacierconn = glaciercorecalls.GlacierConnection(self.aws_access_key,
+                                self.aws_secret_key, region_name=self.region)
                 except boto.exception.AWSConnectionError as e:
                     raise glacierexception.ConnectionException(
                         "Cannot connect to Amazon Glacier.",
@@ -471,7 +470,7 @@ Allowed characters are a-z, A-Z, 0-9, '_' (underscore) and '-' (hyphen)\
             if total_size > 0:
                 part_size = _part_size_for_total_size(total_size)
             else:
-                part_size = GlacierWriter.DEFAULT_PART_SIZE
+                part_size = glaciercorecalls.GlacierWriter.DEFAULT_PART_SIZE
         else:
             ps = self._next_power_of_2(part_size)
             if not ps == part_size:
@@ -1074,7 +1073,7 @@ using {} MB parts to upload.".format(part_size))
                             code='IdError')
 
         # Initialise the writer task.
-        writer = GlacierWriter(self.glacierconn, vault_name,
+        writer = glaciercorecalls.GlacierWriter(self.glacierconn, vault_name,
                                description=description,
                                part_size_in_bytes=part_size_in_bytes,
                                uploadid=uploadid, logger=self.logger)
